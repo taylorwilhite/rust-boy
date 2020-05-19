@@ -1,9 +1,9 @@
 pub struct MemoryBus {
-  ram: [u16; 2048]
+  ram: [u8; 65535]
 }
 
 impl MemoryBus {
-  pub fn get_addr(&mut self, value: usize) -> u16 {
+  pub fn get_addr(&mut self, value: usize) -> u8 {
     self.ram[value]
   }
 }

@@ -71,10 +71,12 @@ impl Cpu {
 
   pub fn execute(&mut self, opcode: u8) {
     use Reg16::*;
-    let data = self.mem.get_addr(self.pc as usize);
+    let lsb = self.mem.get_addr((self.pc + 1) as usize);
+    let msb = self.mem.get_addr((self.pc + 2) as usize);
+    let nn: u16 = (lsb as u16) & ((msb as u16) << 8);
     match opcode {
       0x00 => self.nop(),
-      0x01 => self.ld_16(BC, data),
+      0x01 => self.ld_16(BC, nn),
       _ => panic!("you need to handle opcode {}", opcode)
     }
   }
@@ -84,7 +86,6 @@ impl Cpu {
   }
   
   fn ld_16(&mut self, reg: Reg16, value: u16) {
-    self.pc += 1;
     self.write16reg(reg, value)
   }
 }
