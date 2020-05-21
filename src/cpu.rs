@@ -37,7 +37,7 @@ impl Cpu {
     }
   }
 
-  fn read16reg(&mut self, reg: Reg16) -> u16 {
+  fn read16reg(&mut self, reg: &Reg16) -> u16 {
     use Reg16::*;
     match reg {
       AF => ((self.a as u16) << 8) | (self.f as u16),
@@ -47,7 +47,7 @@ impl Cpu {
     }
   }
 
-  fn write16reg(&mut self, reg: Reg16, value: u16) {
+  fn write16reg(&mut self, reg: &Reg16, value: u16) {
     use Reg16::*;
     match reg {
       AF => {
@@ -77,6 +77,8 @@ impl Cpu {
     match opcode {
       0x00 => self.nop(),
       0x01 => self.ld_16(BC, nn),
+      0x02 => self.ld_16_addr(BC, self.a),
+      0x03 => self.inc_16(BC),
       _ => panic!("you need to handle opcode {}", opcode)
     }
   }
@@ -86,6 +88,18 @@ impl Cpu {
   }
   
   fn ld_16(&mut self, reg: Reg16, value: u16) {
-    self.write16reg(reg, value)
+    self.write16reg(&reg, value);
+    self.pc += 3;
+  }
+
+  fn ld_16_addr(&mut self, reg: Reg16, value: u8) {
+    let addr = self.read16reg(&reg);
+    self.mem.write_addr(addr as usize, value);
+    self.pc += 1;
+  }
+
+  fn inc_16(&mut self, reg: Reg16) {
+    let num = self.read16reg(&reg);
+    self.write16reg(&reg, num + 1)
   }
 }

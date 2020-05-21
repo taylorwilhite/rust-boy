@@ -3,7 +3,11 @@ pub struct MemoryBus {
 }
 
 impl MemoryBus {
-  pub fn get_addr(&mut self, value: usize) -> u8 {
-    self.ram[value]
+  pub fn get_addr(&mut self, addr: usize) -> u8 {
+    self.ram[addr]
+  }
+
+  pub fn write_addr(&mut self, addr: usize, value: u8) {
+    self.ram[addr] = value
   }
 }
