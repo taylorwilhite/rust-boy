@@ -179,3 +179,13 @@ impl Cpu {
     self.pc += 1;
   }
 }
+
+#[test]
+fn nop_increments() {
+  let mem = MemoryBus::new();
+  let mut cpu = Cpu::new(mem);
+
+  cpu.nop();
+
+  assert_eq!(cpu.pc, 1)
+}
