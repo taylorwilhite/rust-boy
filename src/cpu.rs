@@ -31,6 +31,13 @@ pub enum Reg16 {
   HL
 }
 
+enum Cycle {
+  ONE,
+  TWO,
+  THREE,
+  FOUR
+}
+
 impl Cpu {
   pub fn new(mem: MemoryBus) -> Cpu {
     return Cpu {
@@ -124,59 +131,71 @@ impl Cpu {
       0x06 => self.ld_8(B, lsb),
       0x07 => self.rlc(A),
       _ => panic!("you need to handle opcode {}", opcode)
-    }
+    };
   }
 
-  fn nop(&mut self) {
+  fn nop(&mut self) -> Cycle {
     self.pc += 1;
+    Cycle::ONE
   }
 
-  fn rlc(&mut self, reg: Reg8) {
+  fn rlc(&mut self, reg: Reg8) -> Cycle {
     let new_value = self.read8reg(&reg).rotate_left(1);
     self.write8reg(&reg, new_value);
     self.pc += match reg {
       Reg8::A => 1,
       _ => 2
     };
+    match reg {
+      Reg8::A => Cycle::ONE,
+      _ => Cycle::TWO
+    }
   }
 
-  fn ld_8(&mut self, reg: Reg8, value: u8) {
+  fn ld_8(&mut self, reg: Reg8, value: u8) -> Cycle {
     self.write8reg(&reg, value);
     self.pc += 2;
+    Cycle::TWO
   }
   
-  fn ld_16(&mut self, reg: Reg16, value: u16) {
+  fn ld_16(&mut self, reg: Reg16, value: u16) -> Cycle {
     self.write16reg(&reg, value);
     self.pc += 3;
+    Cycle::THREE
   }
 
-  fn ld_8_reg(&mut self, reg: Reg8, value: u8) {
+  fn ld_8_reg(&mut self, reg: Reg8, value: u8) -> Cycle {
     self.write8reg(&reg, value);
     self.pc += 1;
+    Cycle::ONE
   }
 
-  fn ld_16_addr(&mut self, reg: Reg16, value: u8) {
+  fn ld_16_addr(&mut self, reg: Reg16, value: u8) -> Cycle {
     let addr = self.read16reg(&reg);
     self.mem.write_addr(addr as usize, value);
     self.pc += 2;
+    Cycle::TWO
   }
 
-  fn inc_16(&mut self, reg: Reg16) {
+  fn inc_16(&mut self, reg: Reg16) -> Cycle {
     let num = self.read16reg(&reg);
     self.write16reg(&reg, num + 1);
     self.pc += 2;
+    Cycle::TWO
   }
 
-  fn inc_8(&mut self, reg: Reg8) {
+  fn inc_8(&mut self, reg: Reg8) -> Cycle {
     let new_value = self.read8reg(&reg).wrapping_add(1);
     self.write8reg(&reg, new_value);
     self.pc += 1;
+    Cycle::ONE
   }
 
-  fn dec_8(&mut self, reg: Reg8) {
+  fn dec_8(&mut self, reg: Reg8) -> Cycle {
     let new_value = self.read8reg(&reg).wrapping_sub(1);
     self.write8reg(&reg, new_value);
     self.pc += 1;
+    Cycle::ONE
   }
 }
 
