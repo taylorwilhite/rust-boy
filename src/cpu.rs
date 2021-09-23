@@ -128,8 +128,17 @@ impl Cpu {
     self.f.contains(flag)
   }
 
-  fn set_flag(&mut self, flag: Flags, set: bool) {
-    self.f.set(flag, set);
+  fn set_zf(&mut self, set: bool) {
+    self.f.set(Flags::ZERO, set);
+  }
+  fn set_nf(&mut self, set: bool) {
+    self.f.set(Flags::ADD_SUBTRACT, set);
+  }
+  fn set_hf(&mut self, set: bool) {
+    self.f.set(Flags::HALF_CARRY, set);
+  }
+  fn set_cf(&mut self, set: bool) {
+    self.f.set(Flags::CARRY, set);
   }
 
   pub fn execute(&mut self, opcode: u8) {
@@ -174,10 +183,10 @@ impl Cpu {
       _ => new_value == 0,
     };
 
-    self.set_flag(Flags::ZERO, z);
-    self.set_flag(Flags::ADD_SUBTRACT, false);
-    self.set_flag(Flags::HALF_CARRY, false);
-    self.set_flag(Flags::CARRY, carry != 0);
+    self.set_zf(z);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
 
     self.pc += match reg {
       Reg8::A => 1,
@@ -199,10 +208,10 @@ impl Cpu {
       _ => new_value == 0,
     };
 
-    self.set_flag(Flags::ZERO, z);
-    self.set_flag(Flags::ADD_SUBTRACT, false);
-    self.set_flag(Flags::HALF_CARRY, false);
-    self.set_flag(Flags::CARRY, carry != 0);
+    self.set_zf(z);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
 
     self.pc += match reg {
       Reg8::A => 1,
@@ -262,7 +271,7 @@ impl Cpu {
     let new_value = value.wrapping_add(add_value);
     self.write16reg(&reg, new_value);
 
-    self.set_flag(Flags::ADD_SUBTRACT, false);
+    self.set_nf(false);
     // TODO: set carry flags here
 
     self.pc += 1;
@@ -281,9 +290,9 @@ impl Cpu {
     let new_value = value.wrapping_add(1);
     self.write8reg(&reg, new_value);
 
-    self.set_flag(Flags::ZERO, new_value == 0);
-    self.set_flag(Flags::ADD_SUBTRACT, false);
-    self.set_flag(Flags::HALF_CARRY, value & 0xf == 0xf);
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(value & 0xf == 0xf);
 
     self.pc += 1;
     Cycle::ONE
@@ -301,9 +310,9 @@ impl Cpu {
     let new_value = value.wrapping_sub(1);
     self.write8reg(&reg, new_value);
 
-    self.set_flag(Flags::ZERO, new_value == 0);
-    self.set_flag(Flags::ADD_SUBTRACT, true);
-    self.set_flag(Flags::HALF_CARRY, value & 0xf == 0);
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf(value & 0xf == 0);
 
     self.pc += 1;
     Cycle::ONE
