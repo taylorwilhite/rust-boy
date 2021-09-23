@@ -150,29 +150,551 @@ impl Cpu {
     match opcode {
       0x00 => self.nop(),
       0x01 => self.ld_16(BC, nn),
-      0x02 => self.ld_16_addr(BC, self.a),
+      0x02 => self.ld_r16_a(BC),
       0x03 => self.inc_16(BC),
       0x04 => self.inc_8(B),
       0x05 => self.dec_8(B),
-      0x06 => self.ld_8(B, lsb),
+      0x06 => self.ld_r8_n8(B, lsb),
       0x07 => self.rlc(A),
       0x08 => self.ld_nn_sp(nn, self.sp),
-      0x09 => self.add_16_rr(HL, BC),
+      0x09 => self.add_hl_rr(BC),
       0x0A => self.ld_a_rr(BC),
       0x0B => self.dec_16(BC),
       0x0C => self.inc_8(C),
       0x0D => self.dec_8(C),
-      0x0E => self.ld_8(C, lsb),
+      0x0E => self.ld_r8_n8(C, lsb),
       0x0F => self.rrc(A),
+      0x10 => self.stop(),
+      0x11 => self.ld_16(DE, nn),
       _ => panic!("you need to handle opcode {}", opcode),
     };
   }
 
-  fn nop(&mut self) -> Cycle {
+  /* 8-BIT ARITHMETIC AND LOGIC */
+
+  /// ADC A, r8
+  ///
+  /// Add the value in r8 plus the carry flag to A.
+  fn adc_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_value = self
+      .read8reg(&Reg8::A)
+      .wrapping_add(value)
+      .wrapping_add(carry);
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf((self.a & 0xf) + (value & 0xf) + carry > 0xf);
+    self.set_cf(self.a as u16 + value as u16 + carry as u16 > 0xff);
+
     self.pc += 1;
     Cycle::ONE
   }
 
+  /// ADC A, [HL]
+  ///
+  /// Add the byte pointed to by HL plus the carry flag to A
+  fn adc_hl(&mut self) -> Cycle {
+    let mem_value = self.read16reg(&Reg16::HL);
+    let value = self.mem.get_addr(mem_value as usize);
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_value = self.a.wrapping_add(value).wrapping_add(carry);
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf((self.a & 0xf) + (value & 0xf) + carry > 0xf);
+    self.set_cf(self.a as u16 + value as u16 + carry as u16 > 0xff);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// ADC A, n8
+  ///
+  /// Add the value n8 plus the carry flag to A.
+  fn adc_n8(&mut self, value: u8) -> Cycle {
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_value = self.a.wrapping_add(value).wrapping_add(carry);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf((self.a & 0xf) + (value & 0xf) + carry > 0xf);
+    self.set_cf(self.a as u16 + value as u16 + carry as u16 > 0xff);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+
+  /// ADD A, r8
+  ///
+  /// Add the value in r8 to A.
+  fn add_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let (new_value, carry) = self.a.overflowing_add(value);
+    let half_carry = (self.a & 0x0f).checked_add(value | 0xf0).is_none();
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(half_carry);
+    self.set_cf(carry);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// ADD A,[HL]
+  ///
+  /// Add the byte pointed to by HL to A.
+  fn add_a_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    let value = self.mem.get_addr(addr as usize);
+    let (new_value, carry) = self.a.overflowing_add(value);
+    let half_carry = (self.a & 0x0f).checked_add(value | 0xf0).is_none();
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(half_carry);
+    self.set_cf(carry);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// ADD A,n8
+  ///
+  /// Add the value n8 to A.
+  fn add_n8(&mut self, value: u8) -> Cycle {
+    let (new_value, carry) = self.a.overflowing_add(value);
+    let half_carry = (self.a & 0x0f).checked_add(value | 0xf0).is_none();
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(half_carry);
+    self.set_cf(carry);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+
+  /// AND A,r8
+  ///
+  /// Bitwise AND between the value in r8 and A.
+  fn and_r8(&mut self, reg: Reg8) -> Cycle {
+    let new_value = self.a & self.read8reg(&reg);
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(true);
+    self.set_cf(false);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// AND A,[HL]
+  ///
+  /// Bitwise AND between the byte pointed to by HL and A.
+  fn and_a_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    let new_value = self.a & self.mem.get_addr(addr as usize);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(true);
+    self.set_cf(false);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// AND A,n8
+  ///
+  /// Bitwise AND between the value in n8 and A.
+  fn and_n8(&mut self, value: u8) -> Cycle {
+    let new_value = self.a & value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(true);
+    self.set_cf(false);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+
+  /// CP A,r8
+  ///
+  /// Subtract the value in r8 from A and set flags accordingly, but don't store the result. This is useful for ComParing values.
+  fn cp_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let new_value = self.a.wrapping_sub(value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf) & (0xf + 1) != 0); // This may be wrong, no idea
+    self.set_cf(value > self.a);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// CP A,[HL]
+  ///
+  /// Subtract the byte pointed to by HL from A and set flags accordingly, but don't store the result.
+  fn cp_a_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    let value = self.mem.get_addr(addr as usize);
+    let new_value = self.a.wrapping_sub(value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf) & (0xf + 1) != 0); // This may be wrong, no idea
+    self.set_cf(value > self.a);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// CP A,n8
+  ///
+  /// Subtract the value n8 from A and set flags accordingly, but don't store the result.
+  fn cp_n8(&mut self, value: u8) -> Cycle {
+    let new_value = self.a.wrapping_sub(value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf) & (0xf + 1) != 0); // This may be wrong, no idea
+    self.set_cf(value > self.a);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+
+  /// DEC r8
+  ///
+  /// Decrement value in register r8 by 1.
+  fn dec_8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let new_value = value.wrapping_sub(1);
+    self.write8reg(&reg, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf(value & 0xf == 0);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// DEC [HL]
+  ///
+  /// Decrement the byte pointed to by HL by 1.
+  fn dec_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    let value = self.mem.get_addr(addr as usize);
+    let new_value = value.wrapping_sub(1);
+    self.mem.write_addr(addr as usize, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf(value & 0xf == 0);
+
+    self.pc += 1;
+    Cycle::THREE
+  }
+
+  /// INC r8
+  ///
+  /// Increment value in register r8 by 1.
+  fn inc_8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let new_value = value.wrapping_add(1);
+    self.write8reg(&reg, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(value & 0xf == 0xf);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// INC [HL]
+  ///
+  /// Increment the byte pointed to by HL by 1.
+  fn inc_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    let value = self.mem.get_addr(addr as usize);
+    let new_value = value.wrapping_sub(1);
+    self.mem.write_addr(addr as usize, value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(value & 0xf == 0xf);
+
+    self.pc += 1;
+    Cycle::THREE
+  }
+
+  /// OR A,r8
+  ///
+  /// Store into A the bitwise OR of the value in r8 and A.
+  fn or_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let new_value = self.a | value;
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(false);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// OR A,[HL]
+  ///
+  /// Store into A the bitwise OR of the byte pointed to by HL and A.
+  fn or_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let new_value = self.a | value;
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(false);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// OR A,n8
+  ///
+  /// Store into A the bitwise OR of n8 and A.
+  fn or_n8(&mut self, value: u8) -> Cycle {
+    let new_value = self.a | value;
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(false);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+
+  /// SBC A,r8
+  ///
+  /// Subtract the value in r8 and the carry flag from A.
+  fn sbc_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_value = self.a.wrapping_sub(value).wrapping_sub(carry);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf).wrapping_sub(carry) & (0xf + 1) != 0);
+    self.set_cf((value + carry) > self.a);
+    self.a = new_value;
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// SBC A,[HL]
+  ///
+  /// Subtract the byte pointed to by HL and the carry flag from A.
+  fn sbc_a_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_value = self.a.wrapping_sub(value).wrapping_sub(carry);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf).wrapping_sub(carry) & (0xf + 1) != 0);
+    self.set_cf((value + carry) > self.a);
+    self.a = new_value;
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// SBC A,n8
+  ///
+  /// Subtract the value n8 and the carry flag from A.
+  fn sbc_n8(&mut self, value: u8) -> Cycle {
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_value = self.a.wrapping_sub(value).wrapping_sub(carry);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf).wrapping_sub(carry) & (0xf + 1) != 0);
+    self.set_cf((value + carry) > self.a);
+    self.a = new_value;
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+
+  /// SUB A,r8
+  ///
+  /// Subtract the value in r8 from A.
+  fn sub_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let new_value = self.a.wrapping_sub(value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf) & (0xf + 1) != 0);
+    self.set_cf(value > self.a);
+    self.a = new_value;
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// SUB A,[HL]
+  ///
+  /// Subtract the byte pointed to by HL from A.
+  fn sub_a_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let new_value = self.a.wrapping_sub(value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf) & (0xf + 1) != 0);
+    self.set_cf(value > self.a);
+    self.a = new_value;
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// SUB A,n8
+  ///
+  /// Subtract the value n8 from A.
+  fn sub_n8(&mut self, value: u8) -> Cycle {
+    let new_value = self.a.wrapping_sub(value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(true);
+    self.set_hf((self.a & 0xf).wrapping_sub(value & 0xf) & (0xf + 1) != 0);
+    self.set_cf(value > self.a);
+    self.a = new_value;
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+
+  /// XOR A,r8
+  ///
+  /// Bitwise XOR between the value in r8 and A.
+  fn xor_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let new_value = self.a ^ value;
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(false);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
+  /// XOR A,[HL]
+  ///
+  /// Bitwise XOR between the byte pointed to by HL and A.
+  fn xor_a_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let new_value = self.a ^ value;
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(false);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// XOR A,n8
+  ///
+  ///
+  fn xor_n8(&mut self, value: u8) -> Cycle {
+    let new_value = self.a ^ value;
+    self.a = new_value;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(false);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+  /* 16-bit Arithmetic Instructions */
+
+  /// ADD HL,r16
+  ///
+  /// Add the value in r16 to HL.
+  fn add_hl_rr(&mut self, value_reg: Reg16) -> Cycle {
+    let value = self.read16reg(&Reg16::HL);
+    let add_value = self.read16reg(&value_reg);
+    let new_value = value.wrapping_add(add_value);
+    self.write16reg(&Reg16::HL, new_value);
+
+    self.set_nf(false);
+    // TODO: set carry flags here
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// DEC r16
+  ///
+  /// Decrement value in register r16 by 1.
+  fn dec_16(&mut self, reg: Reg16) -> Cycle {
+    let new_value = self.read16reg(&reg).wrapping_sub(1);
+    self.write16reg(&reg, new_value);
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// INC r16
+  ///
+  /// Increment value in register r16 by 1.
+  fn inc_16(&mut self, reg: Reg16) -> Cycle {
+    let num = self.read16reg(&reg);
+    self.write16reg(&reg, num + 1);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /* Bit Operations Instructions */
+
+  /* Bit Shift Instructions */
+
+  /// RLC r8, and RLCA
+  ///
+  /// Rotate register r8/A left.
   fn rlc(&mut self, reg: Reg8) -> Cycle {
     let value = self.read8reg(&reg);
     let carry = value & 0x80;
@@ -198,6 +720,9 @@ impl Cpu {
     }
   }
 
+  /// RRC r8, and RRCA
+  ///
+  /// Rotate register r8/A right.
   fn rrc(&mut self, reg: Reg8) -> Cycle {
     let value = self.read8reg(&reg);
     let carry = value & 0x01;
@@ -223,31 +748,186 @@ impl Cpu {
     }
   }
 
-  fn ld_8(&mut self, reg: Reg8, value: u8) -> Cycle {
-    self.write8reg(&reg, value);
-    self.pc += 2;
-    Cycle::TWO
-  }
+  /* Load Instructions */
 
-  fn ld_16(&mut self, reg: Reg16, value: u16) -> Cycle {
-    self.write16reg(&reg, value);
-    self.pc += 3;
-    Cycle::THREE
-  }
-
-  fn ld_8_reg(&mut self, reg: Reg8, value: u8) -> Cycle {
+  /// LD r8,r8
+  ///
+  /// Load (copy) value in register on the right into register on the left.
+  fn ld_r8_r8(&mut self, reg: Reg8, copy_reg: Reg8) -> Cycle {
+    let value = self.read8reg(&copy_reg);
     self.write8reg(&reg, value);
+
     self.pc += 1;
     Cycle::ONE
   }
 
-  fn ld_16_addr(&mut self, reg: Reg16, value: u8) -> Cycle {
-    let addr = self.read16reg(&reg);
-    self.mem.write_addr(addr as usize, value);
+  /// LD r8,n8
+  ///
+  /// Load value n8 into register r8.
+  fn ld_r8_n8(&mut self, reg: Reg8, value: u8) -> Cycle {
+    self.write8reg(&reg, value);
+
     self.pc += 2;
     Cycle::TWO
   }
 
+  /// LD r16,n16
+  ///
+  /// Load value n16 into register r16.
+  fn ld_16(&mut self, reg: Reg16, value: u16) -> Cycle {
+    self.write16reg(&reg, value);
+
+    self.pc += 3;
+    Cycle::THREE
+  }
+
+  /// LD [HL],r8
+  ///
+  /// Store value in register r8 into byte pointed to by register HL.
+  fn ld_hl_r8(&mut self, reg: Reg8) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.read8reg(&reg);
+    self.mem.write_addr(addr, value);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// LD [HL],n8
+  ///
+  /// Store value n8 into byte pointed to by register HL.
+  fn ld_hl_n8(&mut self, value: u8) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    self.mem.write_addr(addr, value);
+
+    self.pc += 2;
+    Cycle::THREE
+  }
+
+  /// LD r8,[HL]
+  ///
+  /// Load value into register r8 from byte pointed to by register HL.
+  fn ld_r8_hl(&mut self, reg: Reg8) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    self.write8reg(&reg, value);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// LD [r16], A
+  ///
+  /// Store value in register A into byte pointed to by register r16.
+  fn ld_r16_a(&mut self, reg: Reg16) -> Cycle {
+    let value = self.a;
+    let addr = self.read16reg(&reg);
+    self.mem.write_addr(addr as usize, value);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// LD [n16],A
+  ///
+  /// Store value in register A into byte at address n16.
+  fn ld_nn_a(&mut self, addr: u16) -> Cycle {
+    let value = self.a;
+    self.mem.write_addr(addr as usize, value);
+
+    self.pc += 3;
+    Cycle::FOUR
+  }
+
+  /// LDH [n16],A
+  ///
+  /// Store value in register A into byte at address n16, provided it is between $FF00 and $FFFF.
+  /* No idea what this or the next one does */
+
+  /// LDH [C],A
+
+  /// LD A,[r16]
+  ///
+  /// Load value in register A from byte pointed to by register r16.
+  fn ld_a_rr(&mut self, reg: Reg16) -> Cycle {
+    let addr = self.read16reg(&reg);
+    let value = self.mem.get_addr(addr as usize);
+    self.write8reg(&Reg8::A, value);
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// LD A,[n16]
+  ///
+  /// Load value in register A from byte at address n16.
+  fn ld_nn(&mut self, addr: u16) -> Cycle {
+    let value = self.mem.get_addr(addr as usize);
+    self.a = value;
+
+    self.pc += 3;
+    Cycle::FOUR
+  }
+
+  /// LDH A,[n16]
+
+  /// LDH A,[C]
+
+  /// LD [HLI],A
+  ///
+  /// Store value in register A into byte pointed by HL and increment HL afterwards.
+  fn ld_hli_a(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    self.mem.write_addr(addr as usize, self.a);
+    self.write16reg(&Reg16::HL, addr + 1);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// LD [HLD],A
+  ///
+  /// Store value in register A into byte pointed by HL and decrement HL afterwards.
+  fn ld_hld_a(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    self.mem.write_addr(addr as usize, self.a);
+    self.write16reg(&Reg16::HL, addr - 1);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /// LD A,[HLI]
+  ///
+  /// Load value into register A from byte pointed by HL and decrement HL afterwards.
+  fn ld_a_hli(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    let value = self.mem.get_addr(addr as usize);
+    self.a = value;
+    self.write16reg(&Reg16::HL, addr + 1);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+  /// LD A,[HLD]
+  ///
+  /// Load value into register A from byte pointed by HL and increment HL afterwards.
+  fn ld_a_hld(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    let value = self.mem.get_addr(addr as usize);
+    self.a = value;
+    self.write16reg(&Reg16::HL, addr - 1);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
+
+  /* Jumps and Subroutines */
+
+  /* Stack Operations Instructions */
+
+  /// LD [n16],SP
+  ///
+  /// Store SP & $FF at address n16 and SP >> 8 at address n16 + 1.
   fn ld_nn_sp(&mut self, addr: u16, value: u16) -> Cycle {
     let low = value as u8;
     let high = (value >> 8) as u8;
@@ -257,65 +937,21 @@ impl Cpu {
     Cycle::FIVE
   }
 
-  fn ld_a_rr(&mut self, reg: Reg16) -> Cycle {
-    let addr = self.read16reg(&reg);
-    let value = self.mem.get_addr(addr as usize);
-    self.write8reg(&Reg8::A, value);
-    self.pc += 1;
-    Cycle::TWO
-  }
+  /* Miscellaneous Instructions */
 
-  fn add_16_rr(&mut self, reg: Reg16, value_reg: Reg16) -> Cycle {
-    let value = self.read16reg(&reg);
-    let add_value = self.read16reg(&value_reg);
-    let new_value = value.wrapping_add(add_value);
-    self.write16reg(&reg, new_value);
-
-    self.set_nf(false);
-    // TODO: set carry flags here
-
-    self.pc += 1;
-    Cycle::TWO
-  }
-
-  fn inc_16(&mut self, reg: Reg16) -> Cycle {
-    let num = self.read16reg(&reg);
-    self.write16reg(&reg, num + 1);
-    self.pc += 2;
-    Cycle::TWO
-  }
-
-  fn inc_8(&mut self, reg: Reg8) -> Cycle {
-    let value = self.read8reg(&reg);
-    let new_value = value.wrapping_add(1);
-    self.write8reg(&reg, new_value);
-
-    self.set_zf(new_value == 0);
-    self.set_nf(false);
-    self.set_hf(value & 0xf == 0xf);
-
+  /// NOP
+  ///
+  /// No Operation
+  fn nop(&mut self) -> Cycle {
     self.pc += 1;
     Cycle::ONE
   }
 
-  fn dec_16(&mut self, reg: Reg16) -> Cycle {
-    let new_value = self.read16reg(&reg).wrapping_sub(1);
-    self.write16reg(&reg, new_value);
-    self.pc += 1;
-    Cycle::TWO
-  }
-
-  fn dec_8(&mut self, reg: Reg8) -> Cycle {
-    let value = self.read8reg(&reg);
-    let new_value = value.wrapping_sub(1);
-    self.write8reg(&reg, new_value);
-
-    self.set_zf(new_value == 0);
-    self.set_nf(true);
-    self.set_hf(value & 0xf == 0);
-
-    self.pc += 1;
-    Cycle::ONE
+  /// STOP
+  ///
+  ///  go into low power mode?
+  fn stop(&mut self) -> Cycle {
+    panic!("STOP");
   }
 }
 
