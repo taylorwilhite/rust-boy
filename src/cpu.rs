@@ -20,8 +20,8 @@ pub struct Cpu {
   h: u8,
   l: u8,
   sp: u16,
-  pc: u16,
-  mem: MemoryBus,
+  pub pc: u16,
+  pub mem: MemoryBus,
 }
 
 pub enum Reg8 {
