@@ -166,6 +166,11 @@ impl Cpu {
       0x0F => self.rrc(A),
       0x10 => self.stop(),
       0x11 => self.ld_16(DE, nn),
+      0x12 => self.ld_r16_a(DE),
+      0x13 => self.inc_16(DE),
+      0x14 => self.inc_8(D),
+      0x15 => self.dec_8(D),
+      0x16 => self.ld_r8_n8(D, lsb),
       _ => panic!("you need to handle opcode {}", opcode),
     };
   }
