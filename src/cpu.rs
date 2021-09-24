@@ -47,6 +47,7 @@ enum Cycle {
   THREE,
   FOUR,
   FIVE,
+  SIX,
 }
 
 impl Cpu {
@@ -171,6 +172,17 @@ impl Cpu {
       0x14 => self.inc_8(D),
       0x15 => self.dec_8(D),
       0x16 => self.ld_r8_n8(D, lsb),
+      0x17 => self.rla(),
+      0x18 => self.jr_e8(lsb as i8),
+      0x19 => self.add_hl_rr(DE),
+      0x1A => self.ld_a_rr(DE),
+      0x1B => self.dec_16(DE),
+      0x1C => self.inc_8(E),
+      0x1D => self.dec_8(E),
+      0x1E => self.ld_r8_n8(E, lsb),
+      0x1F => self.rra(),
+      0x31 => self.ld_sp_nn(nn),
+      0x49 => self.ld_r8_r8(C, C),
       _ => panic!("you need to handle opcode {}", opcode),
     };
   }
@@ -695,7 +707,78 @@ impl Cpu {
 
   /* Bit Operations Instructions */
 
+  /// BIT u3,r8
+
+  /// BIT u3,[HL]
+
+  /// RES u3,r8
+
+  /// RES u3,[HL]
+
+  /// SET u3,r8
+
+  /// SET u3,[HL]
+
+  /// SWAP r8
+
+  /// SWAP [HL]
+
   /* Bit Shift Instructions */
+
+  /// RL r8
+  ///
+  /// Rotate bits in register r8 left through carry.
+  fn rl_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_carry = (value & 0x80) >> 7 == 0x01;
+    let new_value = (value << 1) + carry;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_zf(new_carry);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
+
+  /// RL [HL]
+  ///
+  /// Rotate byte pointed to by HL left through carry.
+  fn rl_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL);
+    let value = self.mem.get_addr(addr as usize);
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_carry = (value & 0x80) >> 7 == 0x01;
+    let new_value = (value << 1) + carry;
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_zf(new_carry);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
+
+  /// RLA
+  ///
+  /// Rotate register A left through carry.
+  fn rla(&mut self) -> Cycle {
+    let value = self.a;
+    let carry = self.get_flag(Flags::CARRY) as u8;
+    let new_carry = (value & 0x80) >> 7 == 0x01;
+    let new_value = (value << 1) + carry;
+
+    self.set_zf(false);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_zf(new_carry);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
 
   /// RLC r8, and RLCA
   ///
@@ -725,6 +808,36 @@ impl Cpu {
     }
   }
 
+  ///    RLC [HL]
+
+  ///  RLCA
+
+  ///  RR r8
+
+  ///  RR [HL]
+
+  ///  RRA
+  ///
+  /// Rotate register A right through carry.
+  fn rra(&mut self) -> Cycle {
+    let value = self.a;
+    let carry = self.get_flag(Flags::CARRY);
+    let new_carry = value & 0x01 == 0x01;
+    let new_value = if carry {
+      0x80 | (value >> 1)
+    } else {
+      value >> 1
+    };
+
+    self.set_zf(false);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_zf(new_carry);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
+
   /// RRC r8, and RRCA
   ///
   /// Rotate register r8/A right.
@@ -752,6 +865,22 @@ impl Cpu {
       _ => Cycle::TWO,
     }
   }
+
+  ///  RRC [HL]
+
+  ///  RRCA
+
+  ///  SLA r8
+
+  ///  SLA [HL]
+
+  ///  SRA r8
+
+  ///  SRA [HL]
+
+  ///  SRL r8
+
+  ///  SRL [HL]
 
   /* Load Instructions */
 
@@ -928,7 +1057,116 @@ impl Cpu {
 
   /* Jumps and Subroutines */
 
+  /// CALL n16
+  ///
+  /// Call address n16. This pushes the address of the instruction after the CALL on the stack, such that RET can pop it later; then, it executes an implicit JP n16.
+  fn call_nn(&mut self, value: u16) -> Cycle {
+    self.sp -= 2;
+    self.mem.write_word(self.sp as usize, self.pc);
+    self.pc = value;
+
+    Cycle::SIX
+  }
+
+  /// CALL cc,n16
+  ///
+  /// Call address n16 if condition cc is met.
+  fn call_cc_nn(&mut self, flag: Flags, value: u16) -> Cycle {
+    let condition = self.get_flag(flag);
+    if condition {
+      self.sp -= 2;
+      self.mem.write_word(self.sp as usize, self.pc);
+      self.pc = value;
+
+      Cycle::SIX
+    } else {
+      self.pc += 3;
+      Cycle::THREE
+    }
+  }
+
+  /// JP HL
+  ///
+  /// Jump to address in HL; effectively, load PC with value in register HL.
+  fn jp_hl(&mut self) -> Cycle {
+    let value = self.read16reg(&Reg16::HL);
+    self.pc = value;
+
+    Cycle::ONE
+  }
+  /// JP n16
+  ///
+  /// Jump to address n16; effectively, store n16 into PC.
+  fn jp_nn(&mut self, value: u16) -> Cycle {
+    self.pc = value;
+    Cycle::FOUR
+  }
+  /// JP cc,n16
+  ///
+  /// Jump to address n16 if condition cc is met.
+  fn jp_cc_nn(&mut self, flag: Flags, value: u16) -> Cycle {
+    let condition = self.get_flag(flag);
+    if condition {
+      self.pc = value;
+      Cycle::FOUR
+    } else {
+      self.pc += 3;
+      Cycle::THREE
+    }
+  }
+  /// JR e8
+  ///
+  /// Relative Jump by adding e8 to the address of the instruction following the JR. To clarify, an operand of 0 is equivalent to no jumping.
+  fn jr_e8(&mut self, value: i8) -> Cycle {
+    self.pc = self.pc.wrapping_add(value as u16);
+    Cycle::THREE
+  }
+
+  /// JR cc,e8
+  ///
+  /// Relative Jump by adding e8 to the current address if condition cc is met.
+  fn jr_cc_e8(&mut self, flag: Flags, value: i8) -> Cycle {
+    let condition = self.get_flag(flag);
+    if condition {
+      self.pc = self.pc.wrapping_add(value as u16);
+      Cycle::THREE
+    } else {
+      self.pc += 2;
+      Cycle::TWO
+    }
+  }
+
+  /// RET cc
+  ///
+  /// Return from subroutine if condition cc is met.
+
+  /// RET
+  ///
+  /// Return from subroutine. This is basically a POP PC (if such an instruction existed). See POP r16 for an explanation of how POP works.
+
+  /// RETI
+
+  /// RST vec
+
   /* Stack Operations Instructions */
+
+  ///    ADD HL,SP
+
+  ///  ADD SP,e8
+
+  ///  DEC SP
+
+  ///  INC SP
+
+  ///  LD SP,n16
+  ///
+  /// Load value n16 into register SP.
+  fn ld_sp_nn(&mut self, value: u16) -> Cycle {
+    self.sp = value;
+
+    self.pc += 3;
+    Cycle::THREE
+  }
 
   /// LD [n16],SP
   ///
@@ -942,7 +1180,31 @@ impl Cpu {
     Cycle::FIVE
   }
 
+  ///    LD HL,SP+e8
+
+  ///  LD SP,HL
+
+  ///  POP AF
+
+  ///  POP r16
+
+  ///  PUSH AF
+
+  ///  PUSH r16
+
   /* Miscellaneous Instructions */
+
+  ///    CCF
+
+  ///  CPL
+
+  ///  DAA
+
+  ///  DI
+
+  ///  EI
+
+  ///  HALT
 
   /// NOP
   ///
@@ -951,6 +1213,8 @@ impl Cpu {
     self.pc += 1;
     Cycle::ONE
   }
+
+  /// SCF
 
   /// STOP
   ///

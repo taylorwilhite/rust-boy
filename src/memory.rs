@@ -1,12 +1,10 @@
 pub struct MemoryBus {
-  ram: [u8; 65535]
+  ram: [u8; 65535],
 }
 
 impl MemoryBus {
   pub fn new() -> MemoryBus {
-    return MemoryBus {
-      ram: [0; 65535]
-    }
+    return MemoryBus { ram: [0; 65535] };
   }
   pub fn get_addr(&mut self, addr: usize) -> u8 {
     self.ram[addr]
@@ -14,5 +12,10 @@ impl MemoryBus {
 
   pub fn write_addr(&mut self, addr: usize, value: u8) {
     self.ram[addr] = value
+  }
+
+  pub fn write_word(&mut self, addr: usize, value: u16) {
+    self.write_addr(addr, (value & 0xFF) as u8);
+    self.write_addr(addr + 1, (value >> 8) as u8)
   }
 }
