@@ -22,6 +22,7 @@ pub struct Cpu {
   sp: u16,
   pub pc: u16,
   pub mem: MemoryBus,
+  ime: bool,
 }
 
 pub enum Reg8 {
@@ -64,6 +65,7 @@ impl Cpu {
       sp: 0,
       pc: 0,
       mem: mem,
+      ime: false,
     };
   }
 
@@ -159,12 +161,12 @@ impl Cpu {
       0x07 => self.rlc(A),
       0x08 => self.ld_nn_sp(nn, self.sp),
       0x09 => self.add_hl_rr(BC),
-      0x0A => self.ld_a_rr(BC),
-      0x0B => self.dec_16(BC),
-      0x0C => self.inc_8(C),
-      0x0D => self.dec_8(C),
-      0x0E => self.ld_r8_n8(C, lsb),
-      0x0F => self.rrc(A),
+      0x0a => self.ld_a_rr(BC),
+      0x0b => self.dec_16(BC),
+      0x0c => self.inc_8(C),
+      0x0d => self.dec_8(C),
+      0x0e => self.ld_r8_n8(C, lsb),
+      0x0f => self.rrc(A),
       0x10 => self.stop(),
       0x11 => self.ld_16(DE, nn),
       0x12 => self.ld_r16_a(DE),
@@ -175,13 +177,44 @@ impl Cpu {
       0x17 => self.rla(),
       0x18 => self.jr_e8(lsb as i8),
       0x19 => self.add_hl_rr(DE),
-      0x1A => self.ld_a_rr(DE),
-      0x1B => self.dec_16(DE),
-      0x1C => self.inc_8(E),
-      0x1D => self.dec_8(E),
-      0x1E => self.ld_r8_n8(E, lsb),
-      0x1F => self.rra(),
+      0x1a => self.ld_a_rr(DE),
+      0x1b => self.dec_16(DE),
+      0x1c => self.inc_8(E),
+      0x1d => self.dec_8(E),
+      0x1e => self.ld_r8_n8(E, lsb),
+      0x1f => self.rra(),
+      0x20 => self.jr_cc_e8(!Flags::ZERO, lsb as i8),
+      0x21 => self.ld_16(HL, nn),
+      0x22 => self.ld_hli_a(),
+      0x23 => self.inc_hl(),
+      0x24 => self.inc_8(H),
+      0x25 => self.dec_8(H),
+      0x26 => self.ld_r8_n8(H, lsb),
+      0x27 => self.daa(),
+      0x28 => self.jr_cc_e8(Flags::ZERO, lsb as i8),
+      0x29 => self.add_hl_rr(HL),
+      0x2a => self.ld_a_hli(),
+      0x2b => self.dec_hl(),
+      0x2c => self.inc_8(L),
+      0x2d => self.dec_8(L),
+      0x2e => self.ld_r8_n8(L, lsb),
+      0x2f => self.cpl(),
+      0x30 => self.jr_cc_e8(!Flags::CARRY, lsb as i8),
       0x31 => self.ld_sp_nn(nn),
+      0x32 => self.ld_hld_a(),
+      0x33 => self.inc_sp(),
+      0x34 => self.inc_hl(),
+      0x35 => self.dec_hl(),
+      0x36 => self.ld_hl_n8(lsb),
+      0x37 => self.scf(),
+      0x38 => self.jr_cc_e8(Flags::CARRY, lsb as i8),
+      0x39 => self.add_hl_sp(),
+      0x3a => self.ld_a_hld(),
+      0x3b => self.dec_sp(),
+      0x3c => self.inc_8(A),
+      0x3d => self.dec_8(A),
+      0x3e => self.ld_r8_n8(A, lsb),
+      0x3f => self.ccf(),
       0x49 => self.ld_r8_r8(C, C),
       _ => panic!("you need to handle opcode {}", opcode),
     };
@@ -809,12 +842,70 @@ impl Cpu {
   }
 
   ///    RLC [HL]
+  ///
+  /// Rotate byte pointed to by HL left.
+  fn rlc_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let carry = value & 0x80;
+    let new_value = value.rotate_left(1);
+    self.mem.write_addr(addr, new_value);
 
-  ///  RLCA
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   ///  RR r8
+  ///
+  /// Rotate register r8 right through carry.
+  fn rr_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let carry = self.get_flag(Flags::CARRY);
+    let new_carry = value & 0x01 == 0x01;
+    let new_value = if carry {
+      0x80 | (value >> 1)
+    } else {
+      value >> 1
+    };
+    self.write8reg(&reg, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_zf(new_carry);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
 
   ///  RR [HL]
+  ///
+  /// Rotate byte pointed to by HL right through carry.
+  fn rr_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let carry = self.get_flag(Flags::CARRY);
+    let new_carry = value & 0x01 == 0x01;
+    let new_value = if carry {
+      0x80 | (value >> 1)
+    } else {
+      value >> 1
+    };
+    self.mem.write_addr(addr, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_zf(new_carry);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   ///  RRA
   ///
@@ -828,6 +919,7 @@ impl Cpu {
     } else {
       value >> 1
     };
+    self.a = new_value;
 
     self.set_zf(false);
     self.set_nf(false);
@@ -867,8 +959,23 @@ impl Cpu {
   }
 
   ///  RRC [HL]
+  ///
+  /// Rotate byte pointed to by HL right.
+  fn rrc_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let carry = value & 0x01;
+    let new_value = value.rotate_right(1);
+    self.mem.write_addr(addr, new_value);
 
-  ///  RRCA
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   ///  SLA r8
 
@@ -976,9 +1083,24 @@ impl Cpu {
   /// LDH [n16],A
   ///
   /// Store value in register A into byte at address n16, provided it is between $FF00 and $FFFF.
-  /* No idea what this or the next one does */
+  fn ldh_nn_a(&mut self, value: u16) -> Cycle {
+    let addr = 0xff00 | self.mem.get_addr(value as usize) as u16;
+    self.mem.write_addr(addr as usize, self.a);
+
+    self.pc += 2;
+    Cycle::THREE
+  }
 
   /// LDH [C],A
+  ///
+  /// Store value in register A into byte at address $FF00+C.
+  fn ldh_c_a(&mut self) -> Cycle {
+    let addr = 0xff00 | self.c as u16;
+    self.mem.write_addr(addr as usize, self.a);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
 
   /// LD A,[r16]
   ///
@@ -1003,8 +1125,26 @@ impl Cpu {
   }
 
   /// LDH A,[n16]
+  ///
+  /// Load value in register A from byte at address n16, provided it is between $FF00 and $FFFF.
+  fn ldh_a_nn(&mut self, value: u16) -> Cycle {
+    let addr = 0xff00 | value;
+    self.a = self.mem.get_addr(addr as usize);
+
+    self.pc += 2;
+    Cycle::THREE
+  }
 
   /// LDH A,[C]
+  ///
+  /// Load value in register A from byte at address $FF00+c
+  fn ldh_a_c(&mut self) -> Cycle {
+    let addr = 0xff00 | self.c as u16;
+    self.a = self.mem.get_addr(addr as usize);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
 
   /// LD [HLI],A
   ///
@@ -1150,13 +1290,38 @@ impl Cpu {
 
   /* Stack Operations Instructions */
 
-  ///    ADD HL,SP
+  /// ADD HL,SP
+  ///
+  /// Add the value in SP to HL.
+  fn add_hl_sp(&mut self) -> Cycle {
+    let new_value = self.read16reg(&Reg16::HL).wrapping_add(self.sp);
+    self.write16reg(&Reg16::HL, new_value);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
 
   ///  ADD SP,e8
 
   ///  DEC SP
+  ///
+  /// Decrement value in register SP by 1.
+  fn dec_sp(&mut self) -> Cycle {
+    self.sp -= 1;
+
+    self.pc += 1;
+    Cycle::TWO
+  }
 
   ///  INC SP
+  ///
+  /// Increment value in register SP by 1.
+  fn inc_sp(&mut self) -> Cycle {
+    self.sp += 1;
+
+    self.pc += 1;
+    Cycle::TWO
+  }
 
   ///  LD SP,n16
   ///
@@ -1195,17 +1360,101 @@ impl Cpu {
   /* Miscellaneous Instructions */
 
   ///    CCF
+  ///
+  /// Complement Carry Flag.
+  fn ccf(&mut self) -> Cycle {
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(!self.get_flag(Flags::CARRY));
+
+    self.pc += 1;
+    Cycle::ONE
+  }
 
   ///  CPL
+  ///
+  /// ComPLement accumulator (A = ~A).
+  fn cpl(&mut self) -> Cycle {
+    self.a = !self.a;
+
+    self.set_nf(false);
+    self.set_hf(false);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
 
   ///  DAA
+  ///
+  /// Decimal Adjust Accumulator to get a correct BCD representation after an arithmetic instruction.
+  fn daa(&mut self) -> Cycle {
+    // I don't fully understand this instruction, so this is borrowed basically direct from mooneye
+    let mut carry = false;
+    if !self.get_flag(Flags::ADD_SUBTRACT) {
+      if self.get_flag(Flags::CARRY) || self.a > 0x99 {
+        self.a = self.a.wrapping_add(0x60);
+        carry = true;
+      }
+      if self.get_flag(Flags::HALF_CARRY) || self.a & 0x0f > 0x09 {
+        self.a = self.a.wrapping_add(0x06);
+      }
+    } else if self.get_flag(Flags::CARRY) {
+      carry = true;
+      self.a = self.a.wrapping_add(if self.get_flag(Flags::HALF_CARRY) {
+        0x9a
+      } else {
+        0xa0
+      });
+    } else if self.get_flag(Flags::HALF_CARRY) {
+      self.a = self.a.wrapping_add(0xfa);
+    }
+
+    self.set_zf(self.a == 0);
+    self.set_hf(false);
+    self.set_cf(carry);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
 
   ///  DI
+  ///
+  /// Disable Interrupts by clearing the IME flag.
+  fn di(&mut self) -> Cycle {
+    self.ime = false;
+
+    self.pc += 1;
+    Cycle::ONE
+  }
 
   ///  EI
+  ///
+  /// Enable Interrupts by setting the IME flag. The flag is only set after the instruction following EI.
+  fn ei(&mut self) -> Cycle {
+    self.ime = true;
+
+    self.pc += 1;
+    Cycle::ONE
+  }
 
   ///  HALT
-
+  ///
+  /// Enter CPU low-power consumption mode until an interrupt occurs. The exact behavior of this instruction depends on the state of the IME flag.
+  ///
+  /// IME set:
+  /// The CPU enters low-power mode until after an interrupt is about to be serviced. The handler is executed normally, and the CPU resumes execution after the HALT when that returns.
+  ///
+  /// IME not set:
+  /// The behavior depends on whether an interrupt is pending (i.e. ‘[IE] & [IF]’ is non-zero).
+  ///
+  /// None pending:
+  ///     As soon as an interrupt becomes pending, the CPU resumes execution. This is like the above, except that the handler is not called.
+  ///
+  /// Some pending:
+  ///     The CPU continues execution after the HALT, but the byte after it is read twice in a row (PC is not incremented, due to a hardware bug).
+  fn halt(&mut self) {
+    panic!("HALT!");
+  }
   /// NOP
   ///
   /// No Operation
@@ -1215,6 +1464,16 @@ impl Cpu {
   }
 
   /// SCF
+  ///
+  /// Set Carry Flag.
+  fn scf(&mut self) -> Cycle {
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(true);
+
+    self.pc += 1;
+    Cycle::ONE
+  }
 
   /// STOP
   ///
