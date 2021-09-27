@@ -183,7 +183,7 @@ impl Cpu {
       0x1d => self.dec_8(E),
       0x1e => self.ld_r8_n8(E, lsb),
       0x1f => self.rra(),
-      0x20 => self.jr_cc_e8(!Flags::ZERO, lsb as i8),
+      0x20 => self.jr_cc_e8(!self.get_flag(Flags::ZERO), lsb as i8),
       0x21 => self.ld_16(HL, nn),
       0x22 => self.ld_hli_a(),
       0x23 => self.inc_hl(),
@@ -191,7 +191,7 @@ impl Cpu {
       0x25 => self.dec_8(H),
       0x26 => self.ld_r8_n8(H, lsb),
       0x27 => self.daa(),
-      0x28 => self.jr_cc_e8(Flags::ZERO, lsb as i8),
+      0x28 => self.jr_cc_e8(self.get_flag(Flags::ZERO), lsb as i8),
       0x29 => self.add_hl_rr(HL),
       0x2a => self.ld_a_hli(),
       0x2b => self.dec_hl(),
@@ -199,7 +199,7 @@ impl Cpu {
       0x2d => self.dec_8(L),
       0x2e => self.ld_r8_n8(L, lsb),
       0x2f => self.cpl(),
-      0x30 => self.jr_cc_e8(!Flags::CARRY, lsb as i8),
+      0x30 => self.jr_cc_e8(!self.get_flag(Flags::CARRY), lsb as i8),
       0x31 => self.ld_sp_nn(nn),
       0x32 => self.ld_hld_a(),
       0x33 => self.inc_sp(),
@@ -207,7 +207,7 @@ impl Cpu {
       0x35 => self.dec_hl(),
       0x36 => self.ld_hl_n8(lsb),
       0x37 => self.scf(),
-      0x38 => self.jr_cc_e8(Flags::CARRY, lsb as i8),
+      0x38 => self.jr_cc_e8(self.get_flag(Flags::CARRY), lsb as i8),
       0x39 => self.add_hl_sp(),
       0x3a => self.ld_a_hld(),
       0x3b => self.dec_sp(),
@@ -343,6 +343,71 @@ impl Cpu {
       0xbd => self.cp_r8(L),
       0xbe => self.cp_a_hl(),
       0xbf => self.cp_r8(A),
+      0xc0 => self.ret_cc(!self.get_flag(Flags::ZERO)),
+      0xc1 => self.pop_r16(BC),
+      0xc2 => self.jp_cc_nn(!self.get_flag(Flags::ZERO), nn),
+      0xc3 => self.jp_nn(nn),
+      0xc4 => self.call_cc_nn(!self.get_flag(Flags::ZERO), nn),
+      0xc5 => self.push_r16(BC),
+      0xc6 => self.add_n8(lsb),
+      0xc7 => self.rst(0x00),
+      0xc8 => self.ret_cc(self.get_flag(Flags::ZERO)),
+      0xc9 => self.ret(),
+      0xca => self.jp_cc_nn(self.get_flag(Flags::ZERO), nn),
+      0xcb => panic!("doing the ole cb now lads"),
+      0xcc => self.call_cc_nn(self.get_flag(Flags::ZERO), nn),
+      0xcd => self.call_nn(nn),
+      0xce => self.adc_n8(lsb),
+      0xcf => self.rst(0x08),
+      0xd0 => self.ret_cc(!self.get_flag(Flags::CARRY)),
+      0xd1 => self.pop_r16(DE),
+      0xd2 => self.jp_cc_nn(!self.get_flag(Flags::CARRY), nn),
+      0xd3 => panic!(
+        "Shouldn't be able to access opcode {}",
+        format!("{:x}", opcode)
+      ),
+      0xd4 => self.call_cc_nn(!self.get_flag(Flags::CARRY), nn),
+      0xd5 => self.push_r16(DE),
+      0xd6 => self.sub_n8(lsb),
+      0xd7 => self.rst(0x10),
+      0xd8 => self.ret_cc(self.get_flag(Flags::CARRY)),
+      0xd9 => self.reti(),
+      0xda => self.jp_cc_nn(self.get_flag(Flags::CARRY), nn),
+      0xdb => panic!(
+        "Shouldn't be able to access opcode {}",
+        format!("{:x}", opcode)
+      ),
+      0xdc => self.call_cc_nn(self.get_flag(Flags::CARRY), nn),
+      0xdd => panic!(
+        "Shouldn't be able to access opcode {}",
+        format!("{:x}", opcode)
+      ),
+      0xde => self.sbc_n8(lsb),
+      0xdf => self.rst(0x18),
+      0xe0 => self.ldh_nn_a(nn),
+      0xe1 => self.pop_r16(HL),
+      0xe2 => self.ldh_c_a(),
+      0xe5 => self.push_r16(HL),
+      0xe6 => self.and_n8(lsb),
+      0xe7 => self.rst(0x20),
+      0xe8 => self.add_sp_e8(lsb as i8),
+      0xe9 => self.jp_hl(),
+      0xea => self.ld_nn_a(nn),
+      0xee => self.xor_n8(lsb),
+      0xef => self.rst(0x28),
+      0xf0 => self.ldh_a_nn(nn),
+      0xf1 => self.pop_af(),
+      0xf2 => self.ldh_a_c(),
+      0xf3 => self.di(),
+      0xf5 => self.push_r16(AF),
+      0xf6 => self.or_n8(lsb),
+      0xf7 => self.rst(0x30),
+      0xf8 => self.ld_hl_sp_plus(lsb as i8),
+      0xf9 => self.ld_sp_hl(),
+      0xfa => self.ld_nn(nn),
+      0xfb => self.ei(),
+      0xfe => self.cp_n8(lsb),
+      0xff => self.rst(0x38),
       _ => panic!("you need to handle opcode {}", opcode),
     };
   }
@@ -1338,8 +1403,7 @@ impl Cpu {
   /// CALL cc,n16
   ///
   /// Call address n16 if condition cc is met.
-  fn call_cc_nn(&mut self, flag: Flags, value: u16) -> Cycle {
-    let condition = self.get_flag(flag);
+  fn call_cc_nn(&mut self, condition: bool, value: u16) -> Cycle {
     if condition {
       self.sp -= 2;
       self.mem.write_word(self.sp as usize, self.pc);
@@ -1371,8 +1435,7 @@ impl Cpu {
   /// JP cc,n16
   ///
   /// Jump to address n16 if condition cc is met.
-  fn jp_cc_nn(&mut self, flag: Flags, value: u16) -> Cycle {
-    let condition = self.get_flag(flag);
+  fn jp_cc_nn(&mut self, condition: bool, value: u16) -> Cycle {
     if condition {
       self.pc = value;
       Cycle::FOUR
@@ -1392,8 +1455,7 @@ impl Cpu {
   /// JR cc,e8
   ///
   /// Relative Jump by adding e8 to the current address if condition cc is met.
-  fn jr_cc_e8(&mut self, flag: Flags, value: i8) -> Cycle {
-    let condition = self.get_flag(flag);
+  fn jr_cc_e8(&mut self, condition: bool, value: i8) -> Cycle {
     if condition {
       self.pc = self.pc.wrapping_add(value as u16);
       Cycle::THREE
@@ -1406,14 +1468,46 @@ impl Cpu {
   /// RET cc
   ///
   /// Return from subroutine if condition cc is met.
+  fn ret_cc(&mut self, cond: bool) -> Cycle {
+    if cond {
+      self.pc = self.mem.get_word(self.pc as usize);
+      self.sp += 2;
+      Cycle::FIVE
+    } else {
+      self.pc += 1;
+      Cycle::TWO
+    }
+  }
 
   /// RET
   ///
   /// Return from subroutine. This is basically a POP PC (if such an instruction existed). See POP r16 for an explanation of how POP works.
+  fn ret(&mut self) -> Cycle {
+    self.pc = self.mem.get_word(self.pc as usize);
+    self.sp += 2;
+
+    Cycle::FOUR
+  }
 
   /// RETI
+  ///
+  /// Return from subroutine and enable interrupts. This is basically equivalent to executing EI then RET, meaning that IME is set right after this instruction.
+  fn reti(&mut self) -> Cycle {
+    let cycle = self.ret();
+    self.ime = true;
+    cycle
+  }
 
   /// RST vec
+  ///
+  /// Call address vec. This is a shorter and faster equivalent to CALL for suitable values of vec.
+  fn rst(&mut self, value: u8) -> Cycle {
+    self.sp -= 2;
+    self.mem.write_word(self.sp as usize, self.pc);
+    self.pc = value as u16;
+
+    Cycle::FOUR
+  }
 
   /* Stack Operations Instructions */
 
@@ -1429,6 +1523,14 @@ impl Cpu {
   }
 
   ///  ADD SP,e8
+  ///
+  /// Add the signed value e8 to SP.
+  fn add_sp_e8(&mut self, value: i8) -> Cycle {
+    self.sp = self.sp.wrapping_add(value as u16);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   ///  DEC SP
   ///
@@ -1472,17 +1574,80 @@ impl Cpu {
     Cycle::FIVE
   }
 
-  ///    LD HL,SP+e8
+  ///  LD HL,SP+e8
+  ///
+  /// Add the signed value e8 to SP and store the result in HL.
+  fn ld_hl_sp_plus(&mut self, value: i8) -> Cycle {
+    self.sp = self.sp.wrapping_add(value as u16);
+    self.write16reg(&Reg16::HL, self.sp);
+
+    self.set_zf(false);
+    self.set_nf(false);
+    // TODO: Write flags for hf and cf, too tired
+
+    self.pc += 2;
+    Cycle::THREE
+  }
 
   ///  LD SP,HL
+  ///
+  /// Load register HL into register SP.
+  fn ld_sp_hl(&mut self) -> Cycle {
+    self.sp = self.read16reg(&Reg16::HL);
+
+    self.pc += 1;
+    Cycle::TWO
+  }
 
   ///  POP AF
+  ///
+  /// Pop register AF from the stack.
+  fn pop_af(&mut self) -> Cycle {
+    let value = self.mem.get_word(self.sp as usize);
+    self.write16reg(&Reg16::AF, value);
+    self.sp += 2;
+
+    // TODO: set flags, too tired right now
+
+    self.pc += 1;
+    Cycle::THREE
+  }
 
   ///  POP r16
+  ///
+  /// Pop register r16 from the stack. This is roughly equivalent to the following imaginary instructions:
+  ///
+  /// ld LOW(r16), [sp] ; C, E or L
+  ///
+  /// inc sp
+  ///
+  /// ld HIGH(r16), [sp] ; B, D or H
+  ///
+  /// inc sp
+  fn pop_r16(&mut self, reg: Reg16) -> Cycle {
+    let value = self.mem.get_word(self.sp as usize);
+    self.write16reg(&reg, value);
+    self.sp += 2;
+
+    self.pc += 1;
+    Cycle::THREE
+  }
 
   ///  PUSH AF
+  ///
+  /// Push register AF into the stack (Just use r16)
 
   ///  PUSH r16
+  ///
+  /// Push register r16 into the stack. (Also covers AF, no flags are different)
+  fn push_r16(&mut self, reg: Reg16) -> Cycle {
+    self.sp -= 2;
+    let value = self.read16reg(&reg);
+    self.mem.write_word(self.sp as usize, value);
+
+    self.pc += 1;
+    Cycle::FOUR
+  }
 
   /* Miscellaneous Instructions */
 
@@ -1568,16 +1733,16 @@ impl Cpu {
   ///
   /// Enter CPU low-power consumption mode until an interrupt occurs. The exact behavior of this instruction depends on the state of the IME flag.
   ///
-  /// IME set:
+  /// - IME set:
   /// The CPU enters low-power mode until after an interrupt is about to be serviced. The handler is executed normally, and the CPU resumes execution after the HALT when that returns.
   ///
-  /// IME not set:
+  /// - IME not set:
   /// The behavior depends on whether an interrupt is pending (i.e. ‘[IE] & [IF]’ is non-zero).
   ///
-  /// None pending:
+  /// - - None pending:
   ///     As soon as an interrupt becomes pending, the CPU resumes execution. This is like the above, except that the handler is not called.
   ///
-  /// Some pending:
+  /// - - Some pending:
   ///     The CPU continues execution after the HALT, but the byte after it is read twice in a row (PC is not incremented, due to a hardware bug).
   fn halt(&mut self) -> Cycle {
     panic!("HALT!");
