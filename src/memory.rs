@@ -1,10 +1,10 @@
 pub struct MemoryBus {
-  ram: [u8; 65535],
+  ram: [u8; 65536],
 }
 
 impl MemoryBus {
   pub fn new() -> MemoryBus {
-    return MemoryBus { ram: [0; 65535] };
+    return MemoryBus { ram: [0; 65536] };
   }
   pub fn get_addr(&mut self, addr: usize) -> u8 {
     self.ram[addr]

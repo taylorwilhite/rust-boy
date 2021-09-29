@@ -54,7 +54,7 @@ enum Cycle {
 impl Cpu {
   pub fn new(mem: MemoryBus) -> Cpu {
     return Cpu {
-      a: 0,
+      a: 0x01,
       b: 0,
       f: Flags::empty(),
       c: 0,
@@ -62,8 +62,8 @@ impl Cpu {
       e: 0,
       h: 0,
       l: 0,
-      sp: 0,
-      pc: 0,
+      sp: 0xfffe,
+      pc: 0x0100,
       mem: mem,
       ime: false,
     };
@@ -354,7 +354,6 @@ impl Cpu {
       0xc8 => self.ret_cc(self.get_flag(Flags::ZERO)),
       0xc9 => self.ret(),
       0xca => self.jp_cc_nn(self.get_flag(Flags::ZERO), nn),
-      0xcb => panic!("doing the ole cb now lads"),
       0xcc => self.call_cc_nn(self.get_flag(Flags::ZERO), nn),
       0xcd => self.call_nn(nn),
       0xce => self.adc_n8(lsb),
@@ -408,6 +407,268 @@ impl Cpu {
       0xfb => self.ei(),
       0xfe => self.cp_n8(lsb),
       0xff => self.rst(0x38),
+      0xcb => {
+        self.pc += 1;
+        let new_opcode = self.mem.get_addr(self.pc as usize);
+        match new_opcode {
+          0x00 => self.rlc(B),
+          0x01 => self.rlc(C),
+          0x02 => self.rlc(D),
+          0x03 => self.rlc(E),
+          0x04 => self.rlc(H),
+          0x05 => self.rlc(L),
+          0x06 => self.rlc_hl(),
+          0x07 => self.rlc(A),
+          0x08 => self.rrc(B),
+          0x09 => self.rrc(C),
+          0x0a => self.rrc(D),
+          0x0b => self.rrc(E),
+          0x0c => self.rrc(H),
+          0x0d => self.rrc(L),
+          0x0e => self.rrc_hl(),
+          0x0f => self.rrc(A),
+          0x10 => self.rl_r8(B),
+          0x11 => self.rl_r8(C),
+          0x12 => self.rl_r8(D),
+          0x13 => self.rl_r8(E),
+          0x14 => self.rl_r8(H),
+          0x15 => self.rl_r8(L),
+          0x16 => self.rl_hl(),
+          0x17 => self.rl_r8(A),
+          0x18 => self.rr_r8(B),
+          0x19 => self.rr_r8(C),
+          0x1a => self.rr_r8(D),
+          0x1b => self.rr_r8(E),
+          0x1c => self.rr_r8(H),
+          0x1d => self.rr_r8(L),
+          0x1e => self.rr_hl(),
+          0x1f => self.rr_r8(A),
+          0x20 => self.sla_r8(B),
+          0x21 => self.sla_r8(C),
+          0x22 => self.sla_r8(D),
+          0x23 => self.sla_r8(E),
+          0x24 => self.sla_r8(H),
+          0x25 => self.sla_r8(L),
+          0x26 => self.sla_hl(),
+          0x27 => self.sla_r8(A),
+          0x28 => self.sra_r8(B),
+          0x29 => self.sra_r8(C),
+          0x2a => self.sra_r8(D),
+          0x2b => self.sra_r8(E),
+          0x2c => self.sra_r8(H),
+          0x2d => self.sra_r8(L),
+          0x2e => self.sra_hl(),
+          0x2f => self.sra_r8(A),
+          0x30 => self.swap_r8(B),
+          0x31 => self.swap_r8(C),
+          0x32 => self.swap_r8(D),
+          0x33 => self.swap_r8(E),
+          0x34 => self.swap_r8(H),
+          0x35 => self.swap_r8(L),
+          0x36 => self.swap_hl(),
+          0x37 => self.swap_r8(A),
+          0x38 => self.srl_r8(B),
+          0x39 => self.srl_r8(C),
+          0x3a => self.srl_r8(D),
+          0x3b => self.srl_r8(E),
+          0x3c => self.srl_r8(H),
+          0x3d => self.srl_r8(L),
+          0x3e => self.srl_hl(),
+          0x3f => self.srl_r8(A),
+          0x40 => self.bit_u_r8(0, B),
+          0x41 => self.bit_u_r8(0, C),
+          0x42 => self.bit_u_r8(0, D),
+          0x43 => self.bit_u_r8(0, E),
+          0x44 => self.bit_u_r8(0, H),
+          0x45 => self.bit_u_r8(0, L),
+          0x46 => self.bit_u_hl(0),
+          0x47 => self.bit_u_r8(0, A),
+          0x48 => self.bit_u_r8(1, B),
+          0x49 => self.bit_u_r8(1, C),
+          0x4a => self.bit_u_r8(1, D),
+          0x4b => self.bit_u_r8(1, E),
+          0x4c => self.bit_u_r8(1, H),
+          0x4d => self.bit_u_r8(1, L),
+          0x4e => self.bit_u_hl(1),
+          0x4f => self.bit_u_r8(1, A),
+          0x50 => self.bit_u_r8(2, B),
+          0x51 => self.bit_u_r8(2, C),
+          0x52 => self.bit_u_r8(2, D),
+          0x53 => self.bit_u_r8(2, E),
+          0x54 => self.bit_u_r8(2, H),
+          0x55 => self.bit_u_r8(2, L),
+          0x56 => self.bit_u_hl(2),
+          0x57 => self.bit_u_r8(2, A),
+          0x58 => self.bit_u_r8(3, B),
+          0x59 => self.bit_u_r8(3, C),
+          0x5a => self.bit_u_r8(3, D),
+          0x5b => self.bit_u_r8(3, E),
+          0x5c => self.bit_u_r8(3, H),
+          0x5d => self.bit_u_r8(3, L),
+          0x5e => self.bit_u_hl(3),
+          0x5f => self.bit_u_r8(3, A),
+          0x60 => self.bit_u_r8(4, B),
+          0x61 => self.bit_u_r8(4, C),
+          0x62 => self.bit_u_r8(4, D),
+          0x63 => self.bit_u_r8(4, E),
+          0x64 => self.bit_u_r8(4, H),
+          0x65 => self.bit_u_r8(4, L),
+          0x66 => self.bit_u_hl(4),
+          0x67 => self.bit_u_r8(4, A),
+          0x68 => self.bit_u_r8(5, B),
+          0x69 => self.bit_u_r8(5, C),
+          0x6a => self.bit_u_r8(5, D),
+          0x6b => self.bit_u_r8(5, E),
+          0x6c => self.bit_u_r8(5, H),
+          0x6d => self.bit_u_r8(5, L),
+          0x6e => self.bit_u_hl(5),
+          0x6f => self.bit_u_r8(5, A),
+          0x70 => self.bit_u_r8(6, B),
+          0x71 => self.bit_u_r8(6, C),
+          0x72 => self.bit_u_r8(6, D),
+          0x73 => self.bit_u_r8(6, E),
+          0x74 => self.bit_u_r8(6, H),
+          0x75 => self.bit_u_r8(6, L),
+          0x76 => self.bit_u_hl(6),
+          0x77 => self.bit_u_r8(6, A),
+          0x78 => self.bit_u_r8(7, B),
+          0x79 => self.bit_u_r8(7, C),
+          0x7a => self.bit_u_r8(7, D),
+          0x7b => self.bit_u_r8(7, E),
+          0x7c => self.bit_u_r8(7, H),
+          0x7d => self.bit_u_r8(7, L),
+          0x7e => self.bit_u_hl(7),
+          0x7f => self.bit_u_r8(7, A),
+          0x80 => self.res_u_r8(0, B),
+          0x81 => self.res_u_r8(0, C),
+          0x82 => self.res_u_r8(0, D),
+          0x83 => self.res_u_r8(0, E),
+          0x84 => self.res_u_r8(0, H),
+          0x85 => self.res_u_r8(0, L),
+          0x86 => self.res_u_hl(0),
+          0x87 => self.res_u_r8(0, A),
+          0x88 => self.res_u_r8(1, B),
+          0x89 => self.res_u_r8(1, C),
+          0x8a => self.res_u_r8(1, D),
+          0x8b => self.res_u_r8(1, E),
+          0x8c => self.res_u_r8(1, H),
+          0x8d => self.res_u_r8(1, L),
+          0x8e => self.res_u_hl(1),
+          0x8f => self.res_u_r8(1, A),
+          0x90 => self.res_u_r8(2, B),
+          0x91 => self.res_u_r8(2, C),
+          0x92 => self.res_u_r8(2, D),
+          0x93 => self.res_u_r8(2, E),
+          0x94 => self.res_u_r8(2, H),
+          0x95 => self.res_u_r8(2, L),
+          0x96 => self.res_u_hl(2),
+          0x97 => self.res_u_r8(2, A),
+          0x98 => self.res_u_r8(3, B),
+          0x99 => self.res_u_r8(3, C),
+          0x9a => self.res_u_r8(3, D),
+          0x9b => self.res_u_r8(3, E),
+          0x9c => self.res_u_r8(3, H),
+          0x9d => self.res_u_r8(3, L),
+          0x9e => self.res_u_hl(3),
+          0x9f => self.res_u_r8(3, A),
+          0xa0 => self.res_u_r8(4, B),
+          0xa1 => self.res_u_r8(4, C),
+          0xa2 => self.res_u_r8(4, D),
+          0xa3 => self.res_u_r8(4, E),
+          0xa4 => self.res_u_r8(4, H),
+          0xa5 => self.res_u_r8(4, L),
+          0xa6 => self.res_u_hl(4),
+          0xa7 => self.res_u_r8(4, A),
+          0xa8 => self.res_u_r8(5, B),
+          0xa9 => self.res_u_r8(5, C),
+          0xaa => self.res_u_r8(5, D),
+          0xab => self.res_u_r8(5, E),
+          0xac => self.res_u_r8(5, H),
+          0xad => self.res_u_r8(5, L),
+          0xae => self.res_u_hl(5),
+          0xaf => self.res_u_r8(5, A),
+          0xb0 => self.res_u_r8(6, B),
+          0xb1 => self.res_u_r8(6, C),
+          0xb2 => self.res_u_r8(6, D),
+          0xb3 => self.res_u_r8(6, E),
+          0xb4 => self.res_u_r8(6, H),
+          0xb5 => self.res_u_r8(6, L),
+          0xb6 => self.res_u_hl(6),
+          0xb7 => self.res_u_r8(6, A),
+          0xb8 => self.res_u_r8(7, B),
+          0xb9 => self.res_u_r8(7, C),
+          0xba => self.res_u_r8(7, D),
+          0xbb => self.res_u_r8(7, E),
+          0xbc => self.res_u_r8(7, H),
+          0xbd => self.res_u_r8(7, L),
+          0xbe => self.res_u_hl(7),
+          0xbf => self.res_u_r8(7, A),
+          0xc0 => self.set_u_r8(0, B),
+          0xc1 => self.set_u_r8(0, C),
+          0xc2 => self.set_u_r8(0, D),
+          0xc3 => self.set_u_r8(0, E),
+          0xc4 => self.set_u_r8(0, H),
+          0xc5 => self.set_u_r8(0, L),
+          0xc6 => self.set_u_hl(0),
+          0xc7 => self.set_u_r8(0, A),
+          0xc8 => self.set_u_r8(1, B),
+          0xc9 => self.set_u_r8(1, C),
+          0xca => self.set_u_r8(1, D),
+          0xcb => self.set_u_r8(1, E),
+          0xcc => self.set_u_r8(1, H),
+          0xcd => self.set_u_r8(1, L),
+          0xce => self.set_u_hl(1),
+          0xcf => self.set_u_r8(1, A),
+          0xd0 => self.set_u_r8(2, B),
+          0xd1 => self.set_u_r8(2, C),
+          0xd2 => self.set_u_r8(2, D),
+          0xd3 => self.set_u_r8(2, E),
+          0xd4 => self.set_u_r8(2, H),
+          0xd5 => self.set_u_r8(2, L),
+          0xd6 => self.set_u_hl(2),
+          0xd7 => self.set_u_r8(2, A),
+          0xd8 => self.set_u_r8(3, B),
+          0xd9 => self.set_u_r8(3, C),
+          0xda => self.set_u_r8(3, D),
+          0xdb => self.set_u_r8(3, E),
+          0xdc => self.set_u_r8(3, H),
+          0xdd => self.set_u_r8(3, L),
+          0xde => self.set_u_hl(3),
+          0xdf => self.set_u_r8(3, A),
+          0xe0 => self.set_u_r8(4, B),
+          0xe1 => self.set_u_r8(4, C),
+          0xe2 => self.set_u_r8(4, D),
+          0xe3 => self.set_u_r8(4, E),
+          0xe4 => self.set_u_r8(4, H),
+          0xe5 => self.set_u_r8(4, L),
+          0xe6 => self.set_u_hl(4),
+          0xe7 => self.set_u_r8(4, A),
+          0xe8 => self.set_u_r8(5, B),
+          0xe9 => self.set_u_r8(5, C),
+          0xea => self.set_u_r8(5, D),
+          0xeb => self.set_u_r8(5, E),
+          0xec => self.set_u_r8(5, H),
+          0xed => self.set_u_r8(5, L),
+          0xee => self.set_u_hl(5),
+          0xef => self.set_u_r8(5, A),
+          0xf0 => self.set_u_r8(6, B),
+          0xf1 => self.set_u_r8(6, C),
+          0xf2 => self.set_u_r8(6, D),
+          0xf3 => self.set_u_r8(6, E),
+          0xf4 => self.set_u_r8(6, H),
+          0xf5 => self.set_u_r8(6, L),
+          0xf6 => self.set_u_hl(6),
+          0xf7 => self.set_u_r8(6, A),
+          0xf8 => self.set_u_r8(7, B),
+          0xf9 => self.set_u_r8(7, C),
+          0xfa => self.set_u_r8(7, D),
+          0xfb => self.set_u_r8(7, E),
+          0xfc => self.set_u_r8(7, H),
+          0xfd => self.set_u_r8(7, L),
+          0xfe => self.set_u_hl(7),
+          0xff => self.set_u_r8(7, A),
+        }
+      }
       _ => panic!("you need to handle opcode {}", opcode),
     };
   }
@@ -933,20 +1194,113 @@ impl Cpu {
   /* Bit Operations Instructions */
 
   /// BIT u3,r8
+  ///
+  /// Test bit u3 in register r8, set the zero flag if bit not set.
+  fn bit_u_r8(&mut self, bit: u8, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg) & (1 << bit);
+
+    self.set_zf(value == 0);
+    self.set_nf(false);
+    self.set_hf(true);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
 
   /// BIT u3,[HL]
+  ///
+  /// Test bit u3 in the byte pointed by HL, set the zero flag if bit not set.
+  fn bit_u_hl(&mut self, bit: u8) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr) & (1 << bit);
+
+    self.set_zf(value == 0);
+    self.set_nf(false);
+    self.set_hf(true);
+
+    self.pc += 2;
+    Cycle::THREE
+  }
 
   /// RES u3,r8
+  ///
+  /// Set bit u3 in register r8 to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
+  fn res_u_r8(&mut self, bit: u8, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg) & !(1 << bit);
+    self.write8reg(&reg, value);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
 
   /// RES u3,[HL]
+  ///
+  /// Set bit u3 in the byte pointed by HL to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
+  fn res_u_hl(&mut self, bit: u8) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr) & !(1 << bit);
+    self.mem.write_addr(addr, value);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   /// SET u3,r8
+  ///
+  /// Set bit u3 in register r8 to 1. Bit 0 is the rightmost one, bit 7 the leftmost one.
+  fn set_u_r8(&mut self, bit: u8, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg) | (1 << bit);
+    self.write8reg(&reg, value);
+    self.pc += 2;
+    Cycle::TWO
+  }
 
   /// SET u3,[HL]
+  ///
+  /// Set bit u3 in the byte pointed by HL to 1. Bit 0 is the rightmost one, bit 7 the leftmost one.
+  fn set_u_hl(&mut self, bit: u8) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr) | (1 << bit);
+    self.mem.write_addr(addr, value);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   /// SWAP r8
+  ///
+  /// Swap upper 4 bits in register r8 and the lower 4 ones.
+  fn swap_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let new_value = (value >> 4) | (value << 4);
+    self.write8reg(&reg, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(false);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
 
   /// SWAP [HL]
+  ///
+  /// Swap upper 4 bits in the byte pointed by HL and the lower 4 ones.
+  fn swap_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let new_value = (value >> 4) | (value << 4);
+    self.mem.write_addr(addr, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(false);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   /* Bit Shift Instructions */
 
@@ -992,9 +1346,7 @@ impl Cpu {
   /// Rotate register A left through carry.
   fn rla(&mut self) -> Cycle {
     let value = self.a;
-    let carry = self.get_flag(Flags::CARRY) as u8;
     let new_carry = (value & 0x80) >> 7 == 0x01;
-    let new_value = (value << 1) + carry;
 
     self.set_zf(false);
     self.set_nf(false);
@@ -1170,16 +1522,116 @@ impl Cpu {
   }
 
   ///  SLA r8
+  ///
+  /// Shift Left Arithmetic register r8.
+  fn sla_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let carry = value & 0x80;
+    let new_value = value << 1;
+    self.write8reg(&reg, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
 
   ///  SLA [HL]
+  ///
+  /// Shift Left Arithmetic byte pointed to by HL.
+  fn sla_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let carry = value & 0x80;
+    let new_value = value << 1;
+    self.mem.write_addr(addr, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   ///  SRA r8
+  ///
+  /// Shift Right Arithmetic register r8.
+  fn sra_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let carry = value & 0x01;
+    let msb = value & 0x80;
+    let new_value = value >> 1 | msb;
+    self.write8reg(&reg, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
 
   ///  SRA [HL]
+  ///
+  /// Shift Right Arithmetic byte pointed to by HL.
+  fn sra_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let carry = value & 0x01;
+    let msb = value & 0x80;
+    let new_value = value >> 1 | msb;
+    self.mem.write_addr(addr, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   ///  SRL r8
+  ///
+  /// Shift Right Logic register r8.
+  fn srl_r8(&mut self, reg: Reg8) -> Cycle {
+    let value = self.read8reg(&reg);
+    let carry = value & 0x01;
+    let new_value = value >> 1;
+    self.write8reg(&reg, new_value);
 
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
+
+    self.pc += 2;
+    Cycle::TWO
+  }
   ///  SRL [HL]
+  ///
+  /// Shift Right Logic byte pointed to by HL.
+  fn srl_hl(&mut self) -> Cycle {
+    let addr = self.read16reg(&Reg16::HL) as usize;
+    let value = self.mem.get_addr(addr);
+    let carry = value & 0x01;
+    let new_value = value >> 1;
+    self.mem.write_addr(addr, new_value);
+
+    self.set_zf(new_value == 0);
+    self.set_nf(false);
+    self.set_hf(false);
+    self.set_cf(carry != 0);
+
+    self.pc += 2;
+    Cycle::FOUR
+  }
 
   /* Load Instructions */
 
