@@ -11,7 +11,11 @@ impl MemoryBus {
   }
 
   pub fn write_addr(&mut self, addr: usize, value: u8) {
-    self.ram[addr] = value
+    if addr == 0xff02 {
+      let printed = self.get_addr(0xff01 as usize);
+      println!("{}", printed as char)
+    }
+    self.ram[addr] = value;
   }
 
   pub fn get_word(&mut self, addr: usize) -> u16 {

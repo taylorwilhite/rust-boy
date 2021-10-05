@@ -2,6 +2,16 @@ use crate::memory::MemoryBus;
 use bitflags::bitflags;
 
 bitflags!(
+  pub struct InterruptFlags: u8 {
+    const VBLANK = 1 << 0;
+    const STAT = 1 << 1;
+    const TIMER = 1 << 2;
+    const SERIAL = 1 << 3;
+    const JOYPAD = 1 << 4;
+  }
+);
+
+bitflags!(
   pub struct Flags: u8 {
     const ZERO         = 0b_1000_0000;
     const ADD_SUBTRACT = 0b_0100_0000;
@@ -23,6 +33,7 @@ pub struct Cpu {
   pub pc: u16,
   pub mem: MemoryBus,
   ime: bool,
+  halted: bool,
 }
 
 pub enum Reg8 {
@@ -42,7 +53,7 @@ pub enum Reg16 {
   HL,
 }
 
-enum Cycle {
+pub enum Cycle {
   ONE,
   TWO,
   THREE,
@@ -54,7 +65,7 @@ enum Cycle {
 impl Cpu {
   pub fn new(mem: MemoryBus) -> Cpu {
     return Cpu {
-      a: 0x01,
+      a: 0,
       b: 0,
       f: Flags::empty(),
       c: 0,
@@ -62,10 +73,11 @@ impl Cpu {
       e: 0,
       h: 0,
       l: 0,
-      sp: 0xfffe,
-      pc: 0x0100,
+      sp: 0,
+      pc: 0,
       mem: mem,
       ime: false,
+      halted: false,
     };
   }
 
@@ -144,12 +156,54 @@ impl Cpu {
     self.f.set(Flags::CARRY, set);
   }
 
-  pub fn execute(&mut self, opcode: u8) {
+  pub fn step(&mut self) -> Cycle {
+    let opcode = self.mem.get_addr(self.pc as usize);
+    let step_cycle = self.execute(opcode);
+    self.check_interrupt();
+    step_cycle
+  }
+
+  fn fire_interrupt(&mut self, addr: u16) {
+    self.ime = false;
+    self.sp = self.sp.wrapping_sub(2);
+    self.mem.write_word(self.sp as usize, self.pc);
+    self.pc = addr;
+  }
+
+  fn check_interrupt(&mut self) {
+    if self.ime {
+      let triggered_interrupts = self.mem.get_addr(0xff0f);
+      let enabled_interrupts = self.mem.get_addr(0xffff);
+      if triggered_interrupts != 0 {
+        self.halted = false;
+      }
+      let successful_interrupt = triggered_interrupts & enabled_interrupts;
+      let interrupts = InterruptFlags::from_bits_truncate(successful_interrupt);
+      if interrupts.contains(InterruptFlags::VBLANK) {
+        println!("vblank triggered!");
+        self.fire_interrupt(0x40)
+      } else if interrupts.contains(InterruptFlags::STAT) {
+        println!("stat triggered!");
+        self.fire_interrupt(0x48)
+      } else if interrupts.contains(InterruptFlags::TIMER) {
+        println!("timer triggered!");
+        self.fire_interrupt(0x50)
+      } else if interrupts.contains(InterruptFlags::SERIAL) {
+        println!("serial triggered!");
+        self.fire_interrupt(0x58)
+      } else if interrupts.contains(InterruptFlags::JOYPAD) {
+        println!("joypad triggered!");
+        self.fire_interrupt(0x60)
+      }
+    }
+  }
+
+  pub fn execute(&mut self, opcode: u8) -> Cycle {
     use Reg16::*;
     use Reg8::*;
     let lsb = self.mem.get_addr((self.pc + 1) as usize);
     let msb = self.mem.get_addr((self.pc + 2) as usize);
-    let nn: u16 = (lsb as u16) & ((msb as u16) << 8);
+    let nn: u16 = (lsb as u16) | ((msb as u16) << 8);
     match opcode {
       0x00 => self.nop(),
       0x01 => self.ld_16(BC, nn),
@@ -408,8 +462,8 @@ impl Cpu {
       0xfe => self.cp_n8(lsb),
       0xff => self.rst(0x38),
       0xcb => {
-        self.pc += 1;
-        let new_opcode = self.mem.get_addr(self.pc as usize);
+        // self.pc += 1;
+        let new_opcode = self.mem.get_addr((self.pc + 1) as usize);
         match new_opcode {
           0x00 => self.rlc(B),
           0x01 => self.rlc(C),
@@ -670,7 +724,7 @@ impl Cpu {
         }
       }
       _ => panic!("you need to handle opcode {}", opcode),
-    };
+    }
   }
 
   /* 8-BIT ARITHMETIC AND LOGIC */
@@ -1845,7 +1899,7 @@ impl Cpu {
   ///
   /// Call address n16. This pushes the address of the instruction after the CALL on the stack, such that RET can pop it later; then, it executes an implicit JP n16.
   fn call_nn(&mut self, value: u16) -> Cycle {
-    self.sp -= 2;
+    self.sp = self.sp.wrapping_sub(2);
     self.mem.write_word(self.sp as usize, self.pc);
     self.pc = value;
 
@@ -1910,6 +1964,7 @@ impl Cpu {
   fn jr_cc_e8(&mut self, condition: bool, value: i8) -> Cycle {
     if condition {
       self.pc = self.pc.wrapping_add(value as u16);
+      self.pc += 2;
       Cycle::THREE
     } else {
       self.pc += 2;
@@ -1922,8 +1977,9 @@ impl Cpu {
   /// Return from subroutine if condition cc is met.
   fn ret_cc(&mut self, cond: bool) -> Cycle {
     if cond {
-      self.pc = self.mem.get_word(self.pc as usize);
+      self.pc = self.mem.get_word(self.sp as usize);
       self.sp += 2;
+      self.pc += 1;
       Cycle::FIVE
     } else {
       self.pc += 1;
@@ -1935,9 +1991,10 @@ impl Cpu {
   ///
   /// Return from subroutine. This is basically a POP PC (if such an instruction existed). See POP r16 for an explanation of how POP works.
   fn ret(&mut self) -> Cycle {
-    self.pc = self.mem.get_word(self.pc as usize);
+    self.pc = self.mem.get_word(self.sp as usize);
     self.sp += 2;
 
+    self.pc += 1;
     Cycle::FOUR
   }
 
