@@ -41,7 +41,11 @@ impl MemoryBus {
   }
 
   pub fn get_word(&mut self, addr: usize) -> u16 {
-    (self.ram[addr] as u16) | ((self.ram[addr + 1] as u16) << 8)
+    if self.boot_enabled && addr < 0x100 {
+      (self.boot_rom[addr] as u16) | ((self.boot_rom[addr + 1] as u16) << 8)
+    } else {
+      (self.ram[addr] as u16) | ((self.ram[addr + 1] as u16) << 8)
+    }
   }
 
   pub fn write_word(&mut self, addr: usize, value: u16) {
