@@ -9,21 +9,24 @@ pub struct Gb {
 
 impl Gb {
   pub fn new(f: File) -> Gb {
-    let mut memory = MemoryBus::new();
     let boot_rom = File::open("./roms/dmg_boot.bin").expect("couldn't open bootrom");
-    for (index, byte) in boot_rom.bytes().enumerate() {
-      memory.write_addr(index, byte.unwrap())
-    }
-    for (index, byte) in f.bytes().enumerate() {
-      memory.write_addr(index + 0x0100, byte.unwrap())
-    }
+    let boot_rom: Vec<u8> = boot_rom
+      .bytes()
+      .collect::<Result<Vec<u8>, std::io::Error>>()
+      .unwrap();
+    let cart = f
+      .bytes()
+      .collect::<Result<Vec<u8>, std::io::Error>>()
+      .unwrap();
+    let memory = MemoryBus::new(boot_rom, cart);
+
     return Gb {
       cpu: Cpu::new(memory),
     };
   }
 
   pub fn run(&mut self) {
-    let mut output = File::create("./blarggsoutput.txt").expect("could not create file");
+    let mut output = File::create("./debuglogs/blarggsoutput.txt").expect("could not create file");
     loop {
       if self.cpu.pc == 0x100 {
         break;
@@ -35,9 +38,9 @@ impl Gb {
       // let nn: u16 = (lsb as u16) | ((msb as u16) << 8);
       writeln!(
         output,
-        "{:02X?} {:02X?} {:02X?} {:02X?} PC: {:04X?}",
-        opcode, lsb, msb, third, self.cpu.pc
-      );
+        "A: {:02X?} F: {:02X?} B: {:02X?} C: {:02X?} D: {:02X?} E: {:02X?} H: {:02X?} L: {:02X?} SP: {:04X?} PC: 00:{:04X?} ({:02X?} {:02X?} {:02X?} {:02X?})",
+        self.cpu.a, self.cpu.f.bits() as u8, self.cpu.b, self.cpu.c, self.cpu.d, self.cpu.e, self.cpu.h, self.cpu.l, self.cpu.sp, self.cpu.pc, opcode, lsb, msb, third
+      ).expect("error writing to file");
       self.cpu.step();
     }
   }

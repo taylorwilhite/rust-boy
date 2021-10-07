@@ -21,15 +21,15 @@ bitflags!(
 );
 
 pub struct Cpu {
-  a: u8,
-  f: Flags,
-  b: u8,
-  c: u8,
-  d: u8,
-  e: u8,
-  h: u8,
-  l: u8,
-  sp: u16,
+  pub a: u8,
+  pub f: Flags,
+  pub b: u8,
+  pub c: u8,
+  pub d: u8,
+  pub e: u8,
+  pub h: u8,
+  pub l: u8,
+  pub sp: u16,
   pub pc: u16,
   pub mem: MemoryBus,
   ime: bool,
@@ -240,7 +240,7 @@ impl Cpu {
       0x20 => self.jr_cc_e8(!self.get_flag(Flags::ZERO), lsb as i8),
       0x21 => self.ld_16(HL, nn),
       0x22 => self.ld_hli_a(),
-      0x23 => self.inc_hl(),
+      0x23 => self.inc_16(HL),
       0x24 => self.inc_8(H),
       0x25 => self.dec_8(H),
       0x26 => self.ld_r8_n8(H, lsb),
@@ -989,8 +989,8 @@ impl Cpu {
   fn inc_hl(&mut self) -> Cycle {
     let addr = self.read16reg(&Reg16::HL);
     let value = self.mem.get_addr(addr as usize);
-    let new_value = value.wrapping_sub(1);
-    self.mem.write_addr(addr as usize, value);
+    let new_value = value.wrapping_add(1);
+    self.mem.write_addr(addr as usize, new_value);
 
     self.set_zf(new_value == 0);
     self.set_nf(false);
@@ -1366,11 +1366,12 @@ impl Cpu {
     let carry = self.get_flag(Flags::CARRY) as u8;
     let new_carry = (value & 0x80) >> 7 == 0x01;
     let new_value = (value << 1) + carry;
+    self.write8reg(&reg, new_value);
 
     self.set_zf(new_value == 0);
     self.set_nf(false);
     self.set_hf(false);
-    self.set_zf(new_carry);
+    self.set_cf(new_carry);
 
     self.pc += 2;
     Cycle::TWO
@@ -1385,11 +1386,12 @@ impl Cpu {
     let carry = self.get_flag(Flags::CARRY) as u8;
     let new_carry = (value & 0x80) >> 7 == 0x01;
     let new_value = (value << 1) + carry;
+    self.mem.write_addr(addr as usize, new_value);
 
     self.set_zf(new_value == 0);
     self.set_nf(false);
     self.set_hf(false);
-    self.set_zf(new_carry);
+    self.set_cf(new_carry);
 
     self.pc += 2;
     Cycle::FOUR
@@ -1400,12 +1402,15 @@ impl Cpu {
   /// Rotate register A left through carry.
   fn rla(&mut self) -> Cycle {
     let value = self.a;
+    let carry = self.get_flag(Flags::CARRY) as u8;
     let new_carry = (value & 0x80) >> 7 == 0x01;
+    let new_value = (value << 1) + carry;
+    self.write8reg(&Reg8::A, new_value);
 
     self.set_zf(false);
     self.set_nf(false);
     self.set_hf(false);
-    self.set_zf(new_carry);
+    self.set_cf(new_carry);
 
     self.pc += 1;
     Cycle::ONE
@@ -2282,14 +2287,4 @@ impl Cpu {
   fn stop(&mut self) -> Cycle {
     panic!("STOP");
   }
-}
-
-#[test]
-fn nop_increments() {
-  let mem = MemoryBus::new();
-  let mut cpu = Cpu::new(mem);
-
-  cpu.nop();
-
-  assert_eq!(cpu.pc, 1)
 }
