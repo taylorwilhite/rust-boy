@@ -1787,7 +1787,7 @@ impl Cpu {
   ///
   /// Store value in register A into byte at address n16, provided it is between $FF00 and $FFFF.
   fn ldh_nn_a(&mut self, value: u16) -> Cycle {
-    let addr = 0xff00 | self.mem.get_addr(value as usize) as u16;
+    let addr = 0xff00 | value;
     self.mem.write_addr(addr as usize, self.a);
 
     self.pc += 2;
@@ -1904,8 +1904,8 @@ impl Cpu {
   ///
   /// Call address n16. This pushes the address of the instruction after the CALL on the stack, such that RET can pop it later; then, it executes an implicit JP n16.
   fn call_nn(&mut self, value: u16) -> Cycle {
-    self.sp = self.sp.wrapping_sub(2);
-    self.mem.write_word(self.sp as usize, self.pc);
+    self.sp -= 2;
+    self.mem.write_word(self.sp as usize, self.pc + 2);
     self.pc = value;
 
     Cycle::SIX
@@ -1917,7 +1917,7 @@ impl Cpu {
   fn call_cc_nn(&mut self, condition: bool, value: u16) -> Cycle {
     if condition {
       self.sp -= 2;
-      self.mem.write_word(self.sp as usize, self.pc);
+      self.mem.write_word(self.sp as usize, self.pc + 2);
       self.pc = value;
 
       Cycle::SIX
@@ -1960,6 +1960,7 @@ impl Cpu {
   /// Relative Jump by adding e8 to the address of the instruction following the JR. To clarify, an operand of 0 is equivalent to no jumping.
   fn jr_e8(&mut self, value: i8) -> Cycle {
     self.pc = self.pc.wrapping_add(value as u16);
+    self.pc += 2;
     Cycle::THREE
   }
 

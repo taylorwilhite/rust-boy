@@ -26,21 +26,24 @@ impl Gb {
   }
 
   pub fn run(&mut self) {
+    let mut print_logs = false;
     let mut output = File::create("./debuglogs/blarggsoutput.txt").expect("could not create file");
     loop {
       if self.cpu.pc == 0x100 {
-        break;
+        print_logs = true;
       }
       let opcode = self.cpu.mem.get_addr(self.cpu.pc as usize);
       let lsb = self.cpu.mem.get_addr((self.cpu.pc + 1) as usize);
       let msb = self.cpu.mem.get_addr((self.cpu.pc + 2) as usize);
       let third = self.cpu.mem.get_addr((self.cpu.pc + 3) as usize);
       // let nn: u16 = (lsb as u16) | ((msb as u16) << 8);
-      writeln!(
-        output,
-        "A: {:02X?} F: {:02X?} B: {:02X?} C: {:02X?} D: {:02X?} E: {:02X?} H: {:02X?} L: {:02X?} SP: {:04X?} PC: 00:{:04X?} ({:02X?} {:02X?} {:02X?} {:02X?})",
-        self.cpu.a, self.cpu.f.bits() as u8, self.cpu.b, self.cpu.c, self.cpu.d, self.cpu.e, self.cpu.h, self.cpu.l, self.cpu.sp, self.cpu.pc, opcode, lsb, msb, third
-      ).expect("error writing to file");
+      if print_logs {
+        writeln!(
+          output,
+          "A: {:02X?} F: {:02X?} B: {:02X?} C: {:02X?} D: {:02X?} E: {:02X?} H: {:02X?} L: {:02X?} SP: {:04X?} PC: 00:{:04X?} ({:02X?} {:02X?} {:02X?} {:02X?})",
+          self.cpu.a, self.cpu.f.bits() as u8, self.cpu.b, self.cpu.c, self.cpu.d, self.cpu.e, self.cpu.h, self.cpu.l, self.cpu.sp, self.cpu.pc, opcode, lsb, msb, third
+        ).expect("error writing to file");
+      }
       self.cpu.step();
     }
   }

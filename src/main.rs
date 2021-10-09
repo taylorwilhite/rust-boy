@@ -9,5 +9,4 @@ fn main() {
   let f = File::open(rom).expect("couldn't open rom");
   let mut machine = Gb::new(f);
   machine.run();
-  println!("made it through the bootrom!");
 }

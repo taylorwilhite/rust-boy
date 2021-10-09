@@ -17,6 +17,10 @@ impl MemoryBus {
     };
   }
   pub fn get_addr(&mut self, addr: usize) -> u8 {
+    // Remove after Testing
+    if addr == 0xff44 {
+      return 0x90;
+    }
     if self.boot_enabled && addr < 0x100 {
       self.boot_rom[addr]
     } else {
@@ -27,10 +31,14 @@ impl MemoryBus {
   pub fn write_addr(&mut self, addr: usize, value: u8) {
     if addr == 0xff02 {
       let printed = self.get_addr(0xff01 as usize);
-      println!("{}", printed as char);
+      print!("{}", printed as char);
     }
     if addr == 0xff50 {
       self.boot_enabled = false;
+      return;
+    }
+    // Remove after testing
+    if addr == 0xff44 {
       return;
     }
     if self.boot_enabled && addr < 0x100 {
